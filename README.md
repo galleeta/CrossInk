@@ -1,6 +1,6 @@
 # CrossInk + PIN Lock (unofficial fork)
 
-Fork of [CrossInk](URL_ORIGINAL) that adds a simple 4-digit PIN screen
+Fork of [CrossInk](https://github.com/uxjulia/CrossInk) that adds a simple 4-digit PIN screen
 when the device wakes from sleep. Casual privacy only, not encryption:
 anyone with access to the SD card can bypass it.
 
@@ -11,7 +11,18 @@ anyone with access to the SD card can bypass it.
 Download the `.bin` from Releases and flash it as you would the original.
 
 ## Usage
-Settings → PIN lock → enable and set your PIN.
+
+1. Flash this firmware.
+2. On the SD card create `/.crosspoint/pin.json` with:
+   `{"pin": "1234"}`  (exactly 4 digits, as a string)
+3. On the next boot or wake the device asks for the PIN on a touch keypad.
+
+To change the PIN, edit the file. To disable it, delete the file.
+Silent restarts (e.g. after changing settings) do not ask for the PIN.
+
+**Not real security:** the PIN is stored in plain text on the SD card.
+It only keeps casual users out of your device (for privacy or to avoid someone editing your settings...)
+
 
 ---
 

@@ -87,6 +87,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
+#include "PinStore.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
@@ -94,6 +95,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "activities/ActivityManager.h"
 #include "activities/boot_sleep/ImageFolderIndex.h"
 #include "activities/home/BookActions.h"
+#include "activities/util/PinLockActivity.h"
 #include "activities/reader/KOReaderSyncActivity.h"
 #include "activities/reader/ReaderUtils.h"
 #include "activities/reader/ReadingStatsUtils.h"
@@ -1495,6 +1497,9 @@ void setup() {
       break;
   }
 
+  // PIN LOCK: the routing chain below is wrapped so it can run either right away
+  // or after the PIN screen has been passed.
+  auto launchInitialActivity = [=]() {
   if (recoveryFirmwareMode) {
     // Skip normal home/reader routing: jump straight into the SD firmware picker.
     activityManager.replaceActivity(
@@ -1582,6 +1587,18 @@ void setup() {
     APP_STATE.readerActivityLoadCount++;
     APP_STATE.saveToFile();
     activityManager.goToReader(path, false, allowFastInitialReaderRefresh);
+  }
+  };  // launchInitialActivity
+
+  // PIN LOCK: ask for the PIN on cold boots and normal wakes. Silent restarts
+  // (settings changes), network resumes, recovery and crash screens skip it.
+  const bool needsPin = !recoveryFirmwareMode && !rebootedFromPanic && resume != BootResume::Silent &&
+                        resume != BootResume::Network && PIN_STORE.isEnabled();
+  if (needsPin) {
+    activityManager.replaceActivity(
+        std::make_unique<PinLockActivity>(renderer, mappedInputManager, launchInitialActivity));
+  } else {
+    launchInitialActivity();
   }
 
   if (resume == BootResume::Silent || resume == BootResume::Network) {

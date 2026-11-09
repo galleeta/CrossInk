@@ -4,8 +4,19 @@ Fork of [CrossInk](https://github.com/uxjulia/CrossInk) that adds a simple 4-dig
 when the device wakes from sleep. Casual privacy only, not encryption:
 anyone with access to the SD card can bypass it.
 
-**Branch:** `pin-lock`
-**Based on CrossInk version:** X.Y.Z
+- **Branch with the PIN:** `pin-lock`
+- **Based on CrossInk version:** 1.6.1-x4-pro
+- **Target device:** Xteink X4 Pro / `x4-pro`
+
+## About this fork
+
+I made this with the help of Claude free plan in about
+a couple of hours. I'm not an expert, so please treat it as a small personal project,
+tested only on my Xteink X4 Pro, and use it at your own risk. Try if the official CrossInk firmware works before flashing it and keep a copy of the official CrossInk firmware so you can go back.
+
+If something breaks in the future, or you want a change, you are very welcome to
+try it yourself: the changes are small and explained in "What this fork changes"
+below (using AI makes it really easy).
 
 ## Install
 Download the `.bin` from Releases and flash it as you would the original.
@@ -13,8 +24,10 @@ Download the `.bin` from Releases and flash it as you would the original.
 ## Usage
 
 1. Flash this firmware.
-2. On the SD card create `/.crosspoint/pin.json` with:
-   `{"pin": "1234"}`  (exactly 4 digits, as a string)
+2. On the SD card create `/.crosspoint/pin.json` with a 4 digit pin
+   - Example: `{"pin": "1234"}`
+   - It must be exactly 4 digits
+   - The `.crosspoint` folder is hidden: enable "show hidden files" in your file manager
 3. On the next boot or wake the device asks for the PIN on a touch keypad.
 
 To change the PIN, edit the file. To disable it, delete the file.
@@ -23,6 +36,120 @@ Silent restarts (e.g. after changing settings) do not ask for the PIN.
 **Not real security:** the PIN is stored in plain text on the SD card.
 It only keeps casual users out of your device (for privacy or to avoid someone editing your settings...)
 
+## Getting the firmware
+
+### Option 1: download a release (no build needed)
+
+Download the `firmware.bin` from the [Releases](../../releases) page and flash it (see "Flashing").
+
+### Option 2: build it yourself
+
+1. Install **Git**, **VS Code** and the **PlatformIO IDE** extension (the first
+   start takes a few minutes while it installs its tools). On Debian you may
+   also need `sudo apt install python3-venv python3-pip`. 
+2. Clone this fork **with submodules** (the SDK is a submodule; without it the
+   build fails with a `freeink-sdk ... not a directory` error):
+   ```bash
+   git clone --recursive -b pin-lock https://github.com/galleeta/CrossInk.git
+   cd CrossInk
+   ```
+3. Open the folder in VS Code.
+4. In the PlatformIO panel: **Project Tasks → x4-pro → General → Build**
+   (use `x4-pro`, not `x4-pro-debug` or `x4-pro-simulator`, for normal use).
+5. The result is `.pio/build/x4-pro/firmware.bin`.
+
+## Flashing
+
+- **PlatformIO:** connect the device with a USB-C **data** cable and run
+  **x4-pro → General → Upload**. On Linux you need access to the serial port:
+  `sudo usermod -aG dialout $USER`, then log out and back in.
+- **Web flasher:** use the same web flasher you used to install CrossInk (for
+  example CrossInk's web companion app, Inky), and select the `firmware.bin` you
+  built or downloaded.
+
+Remember to not use the built-in updater with this firmware, it would install the official CrossInk build, which
+has no PIN.
+
+## What this fork changes
+
+Almost everything lives in new files, so merging upstream updates should be easy:
+
+| File | Change |
+| --- | --- |
+| `src/PinStore.h` / `.cpp` (new) | Reads `/.crosspoint/pin.json`. |
+| `src/activities/util/PinLockActivity.h` / `.cpp` (new) | The PIN screen (touch keypad; button fallback on devices without touch). It blocks global shortcuts and gestures while shown. |
+| `src/main.cpp` (about 17 lines) | The boot routing chain at the end of `setup()` is wrapped in a lambda, `launchInitialActivity`. If a PIN is configured (and the boot is not a silent restart, network resume, recovery or crash), `PinLockActivity` is shown first and calls that lambda once the PIN is right. Otherwise the lambda runs immediately, as before. |
+
+## Updating when CrossInk releases a new version
+
+I will try to keep the firmware.bin available in the Releases section reasonably up to date with the official CrossInk version and its latest features.
+
+However, updates may not always be immediate, and I may eventually stop maintaining this fork. If that happens, or if you simply don't want to wait for an updated release, you can build your own firmware.bin from the source code by following these steps:
+
+1. **Prepare the tools** (once): Git, VS Code and PlatformIO, as described in
+   "Option 2: build it yourself" above.
+2. **Clone this fork** with submodules (skip this step if you already have it
+   cloned):
+   ```bash
+   git clone --recursive -b pin-lock https://github.com/galleeta/CrossInk.git
+   cd CrossInk
+   ```
+3. **Add the original CrossInk repository** as a second remote (once):
+   ```bash
+   git remote add upstream https://github.com/uxjulia/CrossInk.git
+   ```
+4. **Get the new CrossInk code and put the PIN lock on top of it.** Replace
+   `<default-branch>` with the branch the original project uses (run
+   `git remote show upstream` and look for the line `HEAD branch`):
+   ```bash
+   git checkout pin-lock
+   git fetch upstream
+   git rebase upstream/<default-branch>
+   ```
+   If git reports conflicts, open the listed files in VS Code, keep both sides
+   where they overlap, then run `git add <file>` and `git rebase --continue`.
+   The most likely file is `src/main.cpp`; the "What this fork changes" table
+   above tells you what has to be there. To give up and go back to how things
+   were, run `git rebase --abort`.
+5. **Update the submodules**, in case the SDK changed:
+   ```bash
+   git submodule update --init --recursive
+   ```
+6. **Build and flash** as described in "Getting the firmware" and "Flashing".
+   Check that the device boots and the PIN screen appears.
+
+## Maintainer notes (how I update the release)
+
+Steps for the repository owner, from the root of the project:
+
+```bash
+git checkout pin-lock
+git status                                 
+git branch backup-before-update            
+
+git fetch upstream
+git rebase upstream/<default-branch>        # see 'HEAD branch' in: git remote show upstream
+git submodule update --init --recursive
+```
+
+1. Build **x4-pro**, flash it and check that the device boots, the PIN screen
+   appears and a correct PIN lets me in.
+2. Update "Based on CrossInk version" at the top of this README, commit it.
+3. Push the rebased branch: `git push --force-with-lease` (the rebase rewrote
+   history, so a plain push is rejected).
+4. Publish a new release: **Releases → Draft a new release**, new tag
+   (e.g. `v1.5.1-pin1`), attach `.pio/build/x4-pro/firmware.bin`, and say in
+   the description which CrossInk version it is based on.
+5. Delete the safety branch once everything works:
+   `git branch -D backup-before-update`.
+
+If something goes wrong and I want to start over:
+`git reset --hard backup-before-update`.
+
+## Credits 
+
+All of the firmware is the work of the CrossInk project and its upstream
+projects; this fork only adds the PIN lock. 
 
 ---
 

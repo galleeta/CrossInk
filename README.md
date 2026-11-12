@@ -64,12 +64,12 @@ Download the `firmware.bin` from the [Releases](../../releases) page and flash i
 
 You have two options:
 
-- **Web flasher(recommended):** use a web flasher that accepts a custom file, for example https://crosspointreader.com/install
+- **Web flasher (recommended):** use a web flasher that accepts a custom file, for example https://crosspointreader.com/install
    - Connect the device with a USB-C **data** cable
    - Select your device (Xteink X4 Pro)
    - Go to "Advanced options" and select "Install a firmware .bin file from your computer."
    - Select the `firmware.bin` file you downloaded or built and flash it
-_
+
 - **PlatformIO:** connect the device with a USB-C **data** cable and run
   **x4-pro → General → Upload**. 
 

@@ -4,19 +4,21 @@ Fork of [CrossInk](https://github.com/uxjulia/CrossInk) that adds a simple 4-dig
 when the device wakes from sleep. Casual privacy only, not encryption:
 anyone with access to the SD card can bypass it.
 
+> Looking for the original, unmodified CrossInk? It lives at
+> [uxjulia/CrossInk](https://github.com/uxjulia/CrossInk). This repository is only
+> a fork with the PIN lock added on top.
+
 - **Branch with the PIN:** `pin-lock`
-- **Based on CrossInk version:** 1.6.1-x4-pro
+- **Based on CrossInk version:** X.Y.Z  _(update this on every rebase)_
 - **Target device:** Xteink X4 Pro / `x4-pro`
 
 ## About this fork
 
-I made this with the help of Claude free plan in about
-a couple of hours. I'm not an expert, so please treat it as a small personal project,
-tested only on my Xteink X4 Pro, and use it at your own risk. Try if the official CrossInk firmware works before flashing it and keep a copy of the official CrossInk firmware so you can go back.
+Please treat it as a small personal project, tested only on my Xteink X4 Pro, and use it at your own risk. 
 
 If something breaks in the future, or you want a change, you are very welcome to
 try it yourself: the changes are small and explained in "What this fork changes"
-below (using AI makes it really easy).
+below. I am no expert but I made this with the help of Claude free plan in a couple hours.
 
 ## Install
 Download the `.bin` from Releases and flash it as you would the original.
@@ -60,19 +62,26 @@ Download the `firmware.bin` from the [Releases](../../releases) page and flash i
 
 ## Flashing
 
-- **PlatformIO:** connect the device with a USB-C **data** cable and run
-  **x4-pro → General → Upload**. On Linux you need access to the serial port:
-  `sudo usermod -aG dialout $USER`, then log out and back in.
-- **Web flasher:** use the same web flasher you used to install CrossInk (for
-  example CrossInk's web companion app, Inky), and select the `firmware.bin` you
-  built or downloaded.
+You have two options:
 
-Remember to not use the built-in updater with this firmware, it would install the official CrossInk build, which
+- **Web flasher(recommended):** use a web flasher that accepts a custom file, for example https://crosspointreader.com/install
+   - Connect the device with a USB-C **data** cable
+   - Select your device (Xteink X4 Pro)
+   - Go to "Advanced options" and select "Install a firmware .bin file from your computer."
+   - Select the `firmware.bin` file you downloaded or built and flash it
+_
+- **PlatformIO:** connect the device with a USB-C **data** cable and run
+  **x4-pro → General → Upload**. 
+
+On Linux you need access to the serial port: `sudo usermod -aG dialout $USER`, then log out and back in.
+Also, if you're having trouble flashing it, try using a non Flatpak browser.
+
+Do not use the built-in updater with this firmware, it would install the official crossink build, which
 has no PIN.
 
 ## What this fork changes
 
-Almost everything lives in new files, so merging upstream updates should be easy:
+Almost everything lives in new files, so merging upstream updates is easy:
 
 | File | Change |
 | --- | --- |
@@ -152,6 +161,11 @@ All of the firmware is the work of the CrossInk project and its upstream
 projects; this fork only adds the PIN lock. 
 
 ---
+
+# Original CrossInk README
+
+<details>
+<summary>Click to show the README of the original CrossInk project (unmodified)</summary>
 
 > **This is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** with a focus on improved fonts and minimal reading stats.
 
@@ -326,3 +340,5 @@ This repository does not accept pull requests. Feature requests may be opened in
 If you'd like to show some love and support ongoing development, please consider supporting me on Ko-fi.
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q01M6S7)
+
+</details>

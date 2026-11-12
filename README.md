@@ -20,12 +20,9 @@ If something breaks in the future, or you want a change, you are very welcome to
 try it yourself: the changes are small and explained in "What this fork changes"
 below. I am no expert but I made this with the help of Claude free plan in a couple hours.
 
-## Install
-Download the `.bin` from Releases and flash it as you would the original.
-
 ## Usage
 
-1. Flash this firmware.
+1. Flash this firmware following the instructions bellow.
 2. On the SD card create `/.crosspoint/pin.json` with a 4 digit pin
    - Example: `{"pin": "1234"}`
    - It must be exactly 4 digits

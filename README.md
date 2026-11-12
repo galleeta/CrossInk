@@ -9,7 +9,7 @@ anyone with access to the SD card can bypass it.
 > a fork with the PIN lock added on top.
 
 - **Branch with the PIN:** `pin-lock`
-- **Based on CrossInk version:** X.Y.Z  _(update this on every rebase)_
+- **Based on CrossInk version:** 1.6.1-x4-pro
 - **Target device:** Xteink X4 Pro / `x4-pro`
 
 ## About this fork

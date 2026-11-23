@@ -45,7 +45,7 @@ bool PinStore::fromJson(JsonVariantConst doc) {
     }
   }
 
-  dots = doc["show_dots"] | true;
+  dots = doc["show_dots"] | false;
   return true;
 }
 

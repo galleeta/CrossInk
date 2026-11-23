@@ -8,8 +8,8 @@
 /**
  * Stores the optional privacy PIN in /.crosspoint/pin.json on the SD card.
  *
- *   {"pin": "123456"}                      -> PIN lock enabled
- *   {"pin": "123456", "show_dots": false}  -> nothing is drawn while typing
+ *   {"pin": "123456"}                     -> PIN lock enabled; nothing is drawn while typing
+ *   {"pin": "123456", "show_dots": true}  -> one "*" is shown per typed digit
  *   file missing, empty or invalid         -> PIN lock disabled
  *
  * The PIN is 4 to 16 digits, written as a string. It is kept in plain text on
@@ -19,7 +19,7 @@
 class PinStore : public PersistableStore<PinStore> {
  private:
   std::string pin;  // MIN_PIN_LENGTH..MAX_PIN_LENGTH digits, or empty when disabled
-  bool dots = true;
+  bool dots = false;
   mutable std::once_flag loadOnce;
 
   PinStore() = default;
@@ -36,7 +36,8 @@ class PinStore : public PersistableStore<PinStore> {
   bool fromJson(JsonVariantConst doc);
 
   bool isEnabled() const;
-  // Whether the PIN screen draws one mark per typed digit (default true).
+  // Whether the PIN screen draws one mark per typed digit (default false, so the
+  // length of the PIN is not visible).
   bool showDots() const;
   bool matches(const std::string& attempt) const;
 

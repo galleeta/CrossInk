@@ -13,9 +13,9 @@
 // Full-screen PIN prompt shown on boot / wake when a PIN is configured.
 //
 // Touch devices (X4 Pro): a numeric keypad with Clear / 0 / OK on the last row.
-// Tap the digits, then OK. Clear erases everything typed so far. The field
-// shows one "*" per digit, or nothing at all if "show_dots" is false in
-// pin.json.
+// Tap the digits, then OK. Clear erases everything typed so far. By default
+// nothing is drawn while typing, so neither the length of the PIN nor the keys
+// pressed can be seen; "show_dots": true in pin.json shows one "*" per digit.
 //
 // Devices without touch: Up/Down (or Left/Right) cycle through 0-9 and OK,
 // Confirm adds the shown digit (or submits on OK), Back removes the last digit.
@@ -49,7 +49,7 @@ class PinLockActivity final : public Activity {
 
   std::string entry;       // digits typed so far, as characters '0'-'9'
   uint8_t candidate = 0;   // button mode only: 0-9 = digit, 10 = OK
-  bool showDots = true;    // touch mode: draw one mark per typed digit
+  bool showDots = false;   // touch mode: draw one mark per typed digit
   bool wrongPin = false;
   bool unlocked = false;
 

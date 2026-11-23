@@ -152,7 +152,6 @@ void PinLockActivity::loop() {
         handleKeyboardValue(result.event.value);
         return;
       }
-      if (result.activeChanged) requestUpdate();
     }
     return;
   }
@@ -210,12 +209,21 @@ void PinLockActivity::render(RenderLock&&) {
   renderer.drawText(UI_12_FONT_ID, (screenWidth - titleWidth) / 2, fieldY - lineHeight * 3, title, true,
                     EpdFontFamily::BOLD);
 
-  renderer.fillRectDither(fieldX, fieldY, fieldWidth, kFieldHeight, Color::White);
-  renderer.drawRect(fieldX, fieldY, fieldWidth, kFieldHeight, true);
+  // Hidden input: no field at all, just a hint where it would be.
+  const bool drawField = !touch || showDots;
+  if (drawField) {
+    renderer.fillRectDither(fieldX, fieldY, fieldWidth, kFieldHeight, Color::White);
+    renderer.drawRect(fieldX, fieldY, fieldWidth, kFieldHeight, true);
+  } else {
+    const char* hint = "Type your PIN, then tap OK";
+    const int hintWidth = renderer.getTextWidth(UI_12_FONT_ID, hint, EpdFontFamily::REGULAR);
+    renderer.drawText(UI_12_FONT_ID, (screenWidth - hintWidth) / 2, fieldY + (kFieldHeight - lineHeight) / 2, hint,
+                      true, EpdFontFamily::REGULAR);
+  }
 
   // Touch mode: one mark per typed digit (or nothing if hidden).
   // Button mode: the marks plus the entry being chosen, e.g. "* * [5]".
-  if (!touch || showDots) {
+  if (drawField) {
     auto build = [&](const char* separator) {
       std::string text;
       for (size_t i = 0; i < entry.size(); i++) {

@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -21,16 +22,24 @@ constexpr int kBoxGap = 16;
 constexpr int kKeyboardRows = 4;
 constexpr fui::ActionId kKeyboardAction = 1;
 constexpr int16_t kKeyboardBackspace = -1;
+constexpr int16_t kKeyboardClear = -2;
 
-// Same geometry as the keypad of the frontlight time picker.
-fui::Rect keyboardRect(const GfxRenderer& renderer) {
+// Like the keypad of the frontlight time picker, but taller: this screen has
+// room to spare, and bigger keys mean fewer missed or mistaken taps. It keeps
+// enough space above for the title and the PIN boxes.
+fui::Rect keypadRect(const GfxRenderer& renderer) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int gap = metrics.keyboardKeySpacing;
-  const int height = kKeyboardRows * metrics.keyboardKeyHeight + (kKeyboardRows - 1) * gap;
+  const int bottom = renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing +
+                     metrics.keyboardVerticalOffset;
+  const int themeHeight = kKeyboardRows * metrics.keyboardKeyHeight + (kKeyboardRows - 1) * gap;
+  const int reserved = kBoxHeight + renderer.getLineHeight(UI_12_FONT_ID) * 8;
+  int height = renderer.getScreenHeight() * 50 / 100;
+  height = std::min(height, bottom - reserved);
+  height = std::max(height, themeHeight);
   const int width = renderer.getScreenWidth() * metrics.keyboardWidthPercent / 100;
   const int x = (renderer.getScreenWidth() - width) / 2;
-  const int y = renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing - height +
-                metrics.keyboardVerticalOffset;
+  const int y = bottom - height;
   return {static_cast<int16_t>(x), static_cast<int16_t>(y), static_cast<int16_t>(width), static_cast<int16_t>(height)};
 }
 }  // namespace
@@ -57,6 +66,12 @@ void PinLockActivity::handleKeyboardValue(const int16_t value) {
     enterDigit(static_cast<uint8_t>(value));
   } else if (value == kKeyboardBackspace) {
     deleteDigit();
+  } else if (value == kKeyboardClear) {
+    if (position != 0 || wrongPin) {
+      position = 0;
+      wrongPin = false;
+      requestUpdate();
+    }
   }
 }
 
@@ -193,7 +208,7 @@ void PinLockActivity::render(RenderLock&&) {
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
 
   // With the keypad, centre the boxes in the space above it.
-  const int areaHeight = touch ? keyboardRect(renderer).y : renderer.getScreenHeight();
+  const int areaHeight = touch ? keypadRect(renderer).y : renderer.getScreenHeight();
   const int boxY = areaHeight / 2 - kBoxHeight / 2 + (touch ? lineHeight : 0);
 
   const char* title = "Enter PIN";
@@ -209,7 +224,8 @@ void PinLockActivity::render(RenderLock&&) {
     renderer.drawRect(x, boxY, kBoxWidth, kBoxHeight, true);
     if (current) renderer.drawRect(x + 1, boxY + 1, kBoxWidth - 2, kBoxHeight - 2, true);
 
-    // Entered digits are masked. In button mode the digit being edited is shown.
+    // Entered digits are always masked. Only in button mode (no touch) the
+    // digit being edited is shown, because it cannot be typed directly.
     char text[2] = {0, 0};
     if (i < position) {
       text[0] = '*';
@@ -249,18 +265,21 @@ void PinLockActivity::render(RenderLock&&) {
     keys[9].value = kKeyboardBackspace;
     keys[10].label = kDigitLabels[0];
     keys[10].value = 0;
-    keys[11].kind = fui::KeyKind::Disabled;
+    keys[11].label = "Clear";
+    keys[11].value = kKeyboardClear;
 
     fui::KeyGridProps props;
     props.keys = keys;
     props.rows = kKeyboardRows;
     props.cols = 3;
     props.action = kKeyboardAction;
-    props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
+    // Touch only: a long press must not be turned into a delete, which could
+    // eat digits when tapping slowly or firmly.
+    props.inputMask = static_cast<uint16_t>(fui::InputTouch);
     props.labelText.font = fui::GfxRendererTarget::FONT_BODY;
     const auto& metrics = UITheme::getInstance().getMetrics();
     props.gap = static_cast<int16_t>(metrics.keyboardKeySpacing);
-    fui::keyGrid(frame, keyboardRect(renderer), props);
+    fui::keyGrid(frame, keypadRect(renderer), props);
     keyboardInteractions.publish();
     keyboardInteractionsReady.store(true, std::memory_order_release);
   } else {

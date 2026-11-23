@@ -2,21 +2,23 @@
 
 #include <FreeInkUIGfxRenderer.h>
 
-#include <array>
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <string>
 
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
-// Full-screen 4-digit PIN prompt shown on boot / wake when a PIN is configured.
+// Full-screen PIN prompt shown on boot / wake when a PIN is configured.
 //
-// Touch devices (X4 Pro): a numeric keypad. Tap the digits; the PIN is checked
-// automatically after the fourth one. "Del" removes the last digit.
+// Touch devices (X4 Pro): a numeric keypad with Clear / 0 / OK on the last row.
+// Tap the digits, then OK. Clear erases everything typed so far. The field
+// shows one "*" per digit, or nothing at all if "show_dots" is false in
+// pin.json.
 //
-// Devices without touch: Up/Down (or Left/Right) change the current digit,
-// Confirm accepts it and moves on, Back returns to the previous digit.
+// Devices without touch: Up/Down (or Left/Right) cycle through 0-9 and OK,
+// Confirm adds the shown digit (or submits on OK), Back removes the last digit.
 //
 // On success the callback launches the normal start-up screen (home or last
 // book). This screen never calls finish(): popping the last activity would go
@@ -45,18 +47,17 @@ class PinLockActivity final : public Activity {
   freeink::ui::TouchHoldRouter keyboardTouchRouter;
   std::atomic<bool> keyboardInteractionsReady{false};
 
-  // Touch mode: digits[0..position-1] are the digits entered so far.
-  // Button mode: digits[position] is the digit currently being edited.
-  std::array<uint8_t, 4> digits{};
-  uint8_t position = 0;
+  std::string entry;       // digits typed so far, as characters '0'-'9'
+  uint8_t candidate = 0;   // button mode only: 0-9 = digit, 10 = OK
+  bool showDots = true;    // touch mode: draw one mark per typed digit
   bool wrongPin = false;
   bool unlocked = false;
 
   void handleKeyboardValue(int16_t value);
   void enterDigit(uint8_t digit);
-  void deleteDigit();
-  void adjustDigit(int delta);
-  void confirmDigit();
+  void clearEntry();
+  void adjustCandidate(int delta);
+  void confirmCandidate();
   void submit();
   void unlock();
 };

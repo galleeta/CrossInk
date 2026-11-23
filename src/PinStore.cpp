@@ -6,7 +6,7 @@
 
 namespace {
 bool isValidPin(const std::string& value) {
-  if (value.size() != PinStore::PIN_LENGTH) return false;
+  if (value.size() < PinStore::MIN_PIN_LENGTH || value.size() > PinStore::MAX_PIN_LENGTH) return false;
   for (const char c : value) {
     if (c < '0' || c > '9') return false;
   }
@@ -18,7 +18,10 @@ void PinStore::ensureLoaded() const {
   std::call_once(loadOnce, [this] { const_cast<PinStore*>(this)->PersistableStore<PinStore>::loadFromFile(); });
 }
 
-void PinStore::toJson(JsonDocument& doc) const { doc["pin"] = pin; }
+void PinStore::toJson(JsonDocument& doc) const {
+  doc["pin"] = pin;
+  doc["show_dots"] = dots;
+}
 
 bool PinStore::fromJson(JsonVariantConst doc) {
   std::string candidate;
@@ -26,9 +29,9 @@ bool PinStore::fromJson(JsonVariantConst doc) {
   if (value.is<const char*>()) {
     candidate = value.as<const char*>();
   } else if (value.is<int>()) {
-    // Tolerate {"pin": 1234} typed by hand (leading zeros need the string form).
+    // Tolerate {"pin": 123456} typed by hand (leading zeros need the string form).
     char buf[16];
-    snprintf(buf, sizeof(buf), "%04d", value.as<int>());
+    snprintf(buf, sizeof(buf), "%d", value.as<int>());
     candidate = buf;
   }
 
@@ -37,15 +40,23 @@ bool PinStore::fromJson(JsonVariantConst doc) {
   } else {
     pin.clear();
     if (!candidate.empty()) {
-      LOG_ERR("PIN", "Ignoring invalid PIN in file (must be exactly %u digits)", static_cast<unsigned>(PIN_LENGTH));
+      LOG_ERR("PIN", "Ignoring invalid PIN in file (must be %u to %u digits)",
+              static_cast<unsigned>(MIN_PIN_LENGTH), static_cast<unsigned>(MAX_PIN_LENGTH));
     }
   }
+
+  dots = doc["show_dots"] | true;
   return true;
 }
 
 bool PinStore::isEnabled() const {
   ensureLoaded();
   return !pin.empty();
+}
+
+bool PinStore::showDots() const {
+  ensureLoaded();
+  return dots;
 }
 
 bool PinStore::matches(const std::string& attempt) const {

@@ -16,24 +16,26 @@
 namespace {
 namespace fui = freeink::ui;
 
-constexpr int kBoxWidth = 64;
-constexpr int kBoxHeight = 84;
-constexpr int kBoxGap = 16;
+constexpr int kFieldHeight = 64;
+constexpr int kFieldMaxWidth = 380;
 constexpr int kKeyboardRows = 4;
 constexpr fui::ActionId kKeyboardAction = 1;
-constexpr int16_t kKeyboardBackspace = -1;
+// Value the router would emit for a long press; ignored (long press is off).
+constexpr int16_t kKeyboardIgnore = -1;
 constexpr int16_t kKeyboardClear = -2;
+constexpr int16_t kKeyboardOk = -3;
+constexpr uint8_t kCandidateOk = 10;  // button mode: the "OK" entry after 0-9
 
 // Like the keypad of the frontlight time picker, but taller: this screen has
 // room to spare, and bigger keys mean fewer missed or mistaken taps. It keeps
-// enough space above for the title and the PIN boxes.
+// enough space above for the title and the PIN field.
 fui::Rect keypadRect(const GfxRenderer& renderer) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int gap = metrics.keyboardKeySpacing;
   const int bottom = renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing +
                      metrics.keyboardVerticalOffset;
   const int themeHeight = kKeyboardRows * metrics.keyboardKeyHeight + (kKeyboardRows - 1) * gap;
-  const int reserved = kBoxHeight + renderer.getLineHeight(UI_12_FONT_ID) * 8;
+  const int reserved = kFieldHeight + renderer.getLineHeight(UI_12_FONT_ID) * 8;
   int height = renderer.getScreenHeight() * 50 / 100;
   height = std::min(height, bottom - reserved);
   height = std::max(height, themeHeight);
@@ -49,11 +51,12 @@ PinLockActivity::PinLockActivity(GfxRenderer& renderer, MappedInputManager& mapp
 
 void PinLockActivity::onEnter() {
   Activity::onEnter();
-  digits.fill(0);
-  position = 0;
+  entry.clear();
+  candidate = 0;
+  showDots = PIN_STORE.showDots();
   wrongPin = false;
   unlocked = false;
-  keyboardTouchRouter.overrideValue = kKeyboardBackspace;
+  keyboardTouchRouter.overrideValue = kKeyboardIgnore;
   keyboardTouchRouter.reset();
   keyboardInteractionsReady.store(false, std::memory_order_release);
   requestUpdate();
@@ -64,65 +67,56 @@ void PinLockActivity::onEnter() {
 void PinLockActivity::handleKeyboardValue(const int16_t value) {
   if (value >= 0 && value <= 9) {
     enterDigit(static_cast<uint8_t>(value));
-  } else if (value == kKeyboardBackspace) {
-    deleteDigit();
   } else if (value == kKeyboardClear) {
-    if (position != 0 || wrongPin) {
-      position = 0;
-      wrongPin = false;
-      requestUpdate();
-    }
+    clearEntry();
+  } else if (value == kKeyboardOk) {
+    submit();
   }
 }
 
 void PinLockActivity::enterDigit(const uint8_t digit) {
-  if (position >= PinStore::PIN_LENGTH) return;
+  if (entry.size() >= PinStore::MAX_PIN_LENGTH) return;
+  const bool hadMessage = wrongPin;
   wrongPin = false;
-  digits[position] = digit;
-  position++;
-  if (position >= PinStore::PIN_LENGTH) {
-    submit();
-  } else {
-    requestUpdate();
-  }
+  entry.push_back(static_cast<char>('0' + digit));
+  // With hidden input nothing on screen changes per tap, so skip the refresh.
+  if (showDots || hadMessage) requestUpdate();
 }
 
-void PinLockActivity::deleteDigit() {
-  if (position == 0) return;
+void PinLockActivity::clearEntry() {
+  const bool needsRedraw = wrongPin || (showDots && !entry.empty());
+  entry.clear();
   wrongPin = false;
-  position--;
+  if (needsRedraw) requestUpdate();
+}
+
+void PinLockActivity::adjustCandidate(const int delta) {
+  wrongPin = false;
+  candidate = static_cast<uint8_t>((static_cast<int>(candidate) + delta + 11) % 11);
+}
+
+void PinLockActivity::confirmCandidate() {
+  wrongPin = false;
+  if (candidate == kCandidateOk) {
+    submit();
+    return;
+  }
+  if (entry.size() < PinStore::MAX_PIN_LENGTH) entry.push_back(static_cast<char>('0' + candidate));
+  candidate = 0;
   requestUpdate();
 }
 
-void PinLockActivity::adjustDigit(const int delta) {
-  wrongPin = false;
-  digits[position] = static_cast<uint8_t>((static_cast<int>(digits[position]) + delta + 10) % 10);
-}
-
-void PinLockActivity::confirmDigit() {
-  wrongPin = false;
-  if (position + 1 < static_cast<int>(PinStore::PIN_LENGTH)) {
-    position++;
-    digits[position] = 0;
-    requestUpdate();
-    return;
-  }
-  position = static_cast<uint8_t>(PinStore::PIN_LENGTH);
-  submit();
-}
-
 void PinLockActivity::submit() {
-  std::string attempt;
-  for (const uint8_t d : digits) attempt.push_back(static_cast<char>('0' + d));
+  if (entry.empty()) return;
 
-  if (PIN_STORE.matches(attempt)) {
+  if (PIN_STORE.matches(entry)) {
     unlock();
     return;
   }
 
   wrongPin = true;
-  position = 0;
-  digits.fill(0);
+  entry.clear();
+  candidate = 0;
   requestUpdate();
 }
 
@@ -165,8 +159,8 @@ void PinLockActivity::loop() {
 
   // No touch hardware: physical buttons.
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    if (position > 0) {
-      position--;
+    if (!entry.empty()) {
+      entry.pop_back();
       wrongPin = false;
       requestUpdate();
     }
@@ -174,24 +168,24 @@ void PinLockActivity::loop() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    confirmDigit();
+    confirmCandidate();
     return;
   }
 
   buttonNavigator.onNextRelease([this] {
-    adjustDigit(+1);
+    adjustCandidate(+1);
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this] {
-    adjustDigit(-1);
+    adjustCandidate(-1);
     requestUpdate();
   });
   buttonNavigator.onNextContinuous([this] {
-    adjustDigit(+1);
+    adjustCandidate(+1);
     requestUpdate();
   });
   buttonNavigator.onPreviousContinuous([this] {
-    adjustDigit(-1);
+    adjustCandidate(-1);
     requestUpdate();
   });
 }
@@ -202,48 +196,55 @@ void PinLockActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const bool touch = mappedInput.hasTouch();
-  const int count = static_cast<int>(PinStore::PIN_LENGTH);
-  const int totalWidth = count * kBoxWidth + (count - 1) * kBoxGap;
-  const int startX = (renderer.getScreenWidth() - totalWidth) / 2;
+  const int screenWidth = renderer.getScreenWidth();
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
 
-  // With the keypad, centre the boxes in the space above it.
+  // With the keypad, centre the field in the space above it.
   const int areaHeight = touch ? keypadRect(renderer).y : renderer.getScreenHeight();
-  const int boxY = areaHeight / 2 - kBoxHeight / 2 + (touch ? lineHeight : 0);
+  const int fieldWidth = std::min(screenWidth - 40, kFieldMaxWidth);
+  const int fieldX = (screenWidth - fieldWidth) / 2;
+  const int fieldY = areaHeight / 2 - kFieldHeight / 2 + (touch ? lineHeight : 0);
 
   const char* title = "Enter PIN";
   const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, title, EpdFontFamily::BOLD);
-  renderer.drawText(UI_12_FONT_ID, (renderer.getScreenWidth() - titleWidth) / 2, boxY - lineHeight * 3, title, true,
+  renderer.drawText(UI_12_FONT_ID, (screenWidth - titleWidth) / 2, fieldY - lineHeight * 3, title, true,
                     EpdFontFamily::BOLD);
 
-  for (int i = 0; i < count; i++) {
-    const int x = startX + i * (kBoxWidth + kBoxGap);
-    const bool current = i == position;
+  renderer.fillRectDither(fieldX, fieldY, fieldWidth, kFieldHeight, Color::White);
+  renderer.drawRect(fieldX, fieldY, fieldWidth, kFieldHeight, true);
 
-    renderer.fillRectDither(x, boxY, kBoxWidth, kBoxHeight, current ? Color::LightGray : Color::White);
-    renderer.drawRect(x, boxY, kBoxWidth, kBoxHeight, true);
-    if (current) renderer.drawRect(x + 1, boxY + 1, kBoxWidth - 2, kBoxHeight - 2, true);
+  // Touch mode: one mark per typed digit (or nothing if hidden).
+  // Button mode: the marks plus the entry being chosen, e.g. "* * [5]".
+  if (!touch || showDots) {
+    auto build = [&](const char* separator) {
+      std::string text;
+      for (size_t i = 0; i < entry.size(); i++) {
+        if (i > 0) text += separator;
+        text += '*';
+      }
+      if (!touch) {
+        if (!entry.empty()) text += separator;
+        text += '[';
+        text += (candidate == kCandidateOk) ? std::string("OK") : std::string(1, static_cast<char>('0' + candidate));
+        text += ']';
+      }
+      return text;
+    };
 
-    // Entered digits are always masked. Only in button mode (no touch) the
-    // digit being edited is shown, because it cannot be typed directly.
-    char text[2] = {0, 0};
-    if (i < position) {
-      text[0] = '*';
-    } else if (current && !touch) {
-      text[0] = static_cast<char>('0' + digits[i]);
-    } else {
-      continue;
+    std::string text = build(" ");
+    if (renderer.getTextWidth(UI_12_FONT_ID, text.c_str(), EpdFontFamily::BOLD) > fieldWidth - 16) text = build("");
+    if (!text.empty()) {
+      const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, text.c_str(), EpdFontFamily::BOLD);
+      renderer.drawText(UI_12_FONT_ID, fieldX + (fieldWidth - textWidth) / 2, fieldY + (kFieldHeight - lineHeight) / 2,
+                        text.c_str(), true, EpdFontFamily::BOLD);
     }
-    const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, text, EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, x + (kBoxWidth - textWidth) / 2, boxY + (kBoxHeight - lineHeight) / 2, text, true,
-                      EpdFontFamily::BOLD);
   }
 
   if (wrongPin) {
     const char* message = "Wrong PIN, try again";
     const int messageWidth = renderer.getTextWidth(UI_12_FONT_ID, message, EpdFontFamily::REGULAR);
-    renderer.drawText(UI_12_FONT_ID, (renderer.getScreenWidth() - messageWidth) / 2, boxY + kBoxHeight + lineHeight,
-                      message, true, EpdFontFamily::REGULAR);
+    renderer.drawText(UI_12_FONT_ID, (screenWidth - messageWidth) / 2, fieldY + kFieldHeight + lineHeight, message,
+                      true, EpdFontFamily::REGULAR);
   }
 
   if (touch) {
@@ -261,19 +262,20 @@ void PinLockActivity::render(RenderLock&&) {
       keys[i].label = kDigitLabels[i + 1];
       keys[i].value = static_cast<int16_t>(i + 1);
     }
-    keys[9].label = "Del";
-    keys[9].value = kKeyboardBackspace;
+    keys[9].label = "Clear";
+    keys[9].value = kKeyboardClear;
     keys[10].label = kDigitLabels[0];
     keys[10].value = 0;
-    keys[11].label = "Clear";
-    keys[11].value = kKeyboardClear;
+    keys[11].label = tr(STR_OK);
+    keys[11].kind = fui::KeyKind::Ok;
+    keys[11].value = kKeyboardOk;
 
     fui::KeyGridProps props;
     props.keys = keys;
     props.rows = kKeyboardRows;
     props.cols = 3;
     props.action = kKeyboardAction;
-    // Touch only: a long press must not be turned into a delete, which could
+    // Touch only: a long press must not be turned into an action, which could
     // eat digits when tapping slowly or firmly.
     props.inputMask = static_cast<uint16_t>(fui::InputTouch);
     props.labelText.font = fui::GfxRendererTarget::FONT_BODY;

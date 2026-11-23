@@ -23,9 +23,10 @@ below. I am no expert but I made this with the help of Claude free plan in a cou
 ## Usage
 
 1. Flash this firmware following the instructions bellow.
-2. On the SD card create `/.crosspoint/pin.json` with a 4 digit pin
-   - Example: `{"pin": "1234"}`
-   - It must be exactly 4 digits
+2. On the SD card create `/.crosspoint/pin.json` 
+   - Example: `{"pin": "1538", "show_dots": true}`
+      - the pin must be 4-16 digits long
+      - the show_dots option must be `true` or `false` (controls whether PIN characters are visible or hidden while typing)
    - The `.crosspoint` folder is hidden: enable "show hidden files" in your file manager
 3. On the next boot or wake the device asks for the PIN on a touch keypad.
 
